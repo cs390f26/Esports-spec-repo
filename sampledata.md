@@ -88,8 +88,8 @@ Sample payloads for each table using the schema’s field names, integer IDs, an
     "reservation_id": 8802,
     "user_id": "usr_002",
     "space_id": 2,
-    "start_time": "2026-09-23T17:00:00Z",
-    "end_time": "2026-09-23T19:00:00Z",
+    "start_time": "2026-09-23T18:00:00Z",
+    "end_time": "2026-09-23T20:00:00Z",
     "status": "CONFIRMED",
     "created_at": "2026-09-22T20:15:00Z"
   }

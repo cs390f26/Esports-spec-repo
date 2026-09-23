@@ -54,10 +54,12 @@ Stores bookings for a space, including the user, scheduled interval, and reserva
 | `reservation_id` | `INTEGER`      | Primary key        | Unique identifier for a reservation.               |
 | `user_name`      | `VARCHAR(255)` |                    | Identifier for the user making the reservation.    |
 | `space_id`       | `INTEGER`      |                    | Space associated with the reservation.             |
-| `start_time`     | `TIMESTAMP`    | —                  | Scheduled start of the reservation.                |
-| `end_time`       | `TIMESTAMP`    | —                  | Scheduled end of the reservation.                  |
+| `start_time`     | `TIMESTAMP`    | —                  | Start of the reserved time block.                  |
+| `end_time`       | `TIMESTAMP`    | —                  | End of the reserved time block.                    |
 | `status`         | `VARCHAR(255)` | —                  | Reservation state, such as CONFIRMED or CANCELLED. |
 | `created_at`     | `TIMESTAMP`    | —                  | Time the reservation record was created.           |
+
+Reservations always cover exactly one 2-hour time block: `start_time` falls on 10:00, 12:00, 14:00, 16:00, 18:00, or 20:00 lounge local time, and `end_time` is two hours later. The application derives both from the date and block the user picks. Because blocks never partially overlap, a conflict check only needs to match the same space (or equipment item) and the same `start_time`.
 
 `Reservations.reservation_id` is referenced by `ReservationEquipment.reservation_id`.
 

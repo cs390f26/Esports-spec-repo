@@ -23,59 +23,48 @@
         <div>
           <div class="eyebrow">Space details</div>
           <h1 id="desk-title">Desk 03</h1>
-          <p>Explore the setup and find your time.</p>
+          <p>Explore the setup, then reserve a time block.</p>
         </div>
         <a class="button primary" id="reserve-desk" href="02-reservation.html"
           >Reserve this station</a
         >
       </div>
-      <div class="split">
-        <section class="panel">
-          <div class="monitor layout-2"></div>
-          <h2>Gaming station</h2>
-          <p>Built for focused sessions and competitive play.</p>
-          <dl class="specs">
-            <div>
-              <dt>Graphics</dt>
-              <dd id="gpu">RTX 4070</dd>
-            </div>
-            <div>
-              <dt>Processor</dt>
-              <dd>Intel Core i7-13700</dd>
-            </div>
-            <div>
-              <dt>Memory</dt>
-              <dd id="ram">32 GB</dd>
-            </div>
-            <div>
-              <dt>Storage</dt>
-              <dd>1 TB NVMe SSD</dd>
-            </div>
-            <div>
-              <dt>Display</dt>
-              <dd>27-inch QHD · 165 Hz</dd>
-            </div>
-            <div>
-              <dt>Included</dt>
-              <dd>Keyboard + gaming mouse</dd>
-            </div>
-          </dl>
-          <div class="divider">
-            <h3>Bring your favorite game.</h3>
-            <p>Valorant · Rocket League · Counter-Strike 2 · Overwatch 2</p>
-            <small>Controllers and headsets can be added when booking.</small>
+      <section class="panel">
+        <div class="monitor layout-2"></div>
+        <h2>Gaming station</h2>
+        <p>Built for focused sessions and competitive play.</p>
+        <dl class="specs">
+          <div>
+            <dt>Graphics</dt>
+            <dd id="gpu">RTX 4070</dd>
           </div>
-        </section>
-        <section class="panel">
-          <h2>Station schedule</h2>
-          <p id="date-label"></p>
-          <div id="schedule"></div>
-          <p class="help">
-            Times shown in your device’s local timezone. Reservation names are
-            private.
-          </p>
-        </section>
-      </div>
+          <div>
+            <dt>Processor</dt>
+            <dd>Intel Core i7-13700</dd>
+          </div>
+          <div>
+            <dt>Memory</dt>
+            <dd id="ram">32 GB</dd>
+          </div>
+          <div>
+            <dt>Storage</dt>
+            <dd>1 TB NVMe SSD</dd>
+          </div>
+          <div>
+            <dt>Display</dt>
+            <dd>27-inch QHD · 165 Hz</dd>
+          </div>
+          <div>
+            <dt>Included</dt>
+            <dd>Keyboard + gaming mouse</dd>
+          </div>
+        </dl>
+        <div class="divider">
+          <h3>Bring your favorite game.</h3>
+          <p>Valorant · Rocket League · Counter-Strike 2 · Overwatch 2</p>
+          <small>Controllers and headsets can be added when booking.</small>
+        </div>
+      </section>
       <noscript
         ><p>
           Enable JavaScript to display the sample stations and use the booking
@@ -112,6 +101,21 @@
       const dateText = (d) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const demoDate = dateText(tomorrow);
+      // Reservations are fixed 2-hour blocks from 10:00 to 22:00 local time.
+      const hh = (h) => String(h).padStart(2, "0") + ":00";
+      const blocks = [10, 12, 14, 16, 18, 20].map((h) => ({
+        start: hh(h),
+        end: hh(h + 2),
+      }));
+      const now = new Date();
+      const today = dateText(now);
+      // The block in progress now, or the next one when the lounge is closed.
+      const nowBlock = (() => {
+        const b = blocks.find((b) => new Date(today + "T" + b.end) > now);
+        return b
+          ? { date: today, ...b, live: new Date(today + "T" + b.start) <= now }
+          : { date: demoDate, ...blocks[0], live: false };
+      })();
       store = store || {
         desks: Array.from({ length: 6 }, (_, i) => ({
           id: i + 1,
@@ -154,9 +158,9 @@
       const overlap = (a, b, c, d) => a < d && b > c;
       function conflicts(d, date, start, end) {
         return (
-          (date === demoDate &&
+          (date === nowBlock.date &&
             [2, 5].includes(+d) &&
-            overlap(start, end, "16:00", "18:00")) ||
+            overlap(start, end, nowBlock.start, nowBlock.end)) ||
           store.bookings.some(
             (b) =>
               b.status === "CONFIRMED" &&
@@ -167,49 +171,22 @@
         );
       }
       function card(d) {
-        const busy = conflicts(d.id, demoDate, "16:00", "18:00");
+        const busy = conflicts(d.id, nowBlock.date, nowBlock.start, nowBlock.end);
         return `<a class="station" href="03-space-details.html?desk=${d.id}"><div class="row"><strong>${esc(d.name)}</strong><span aria-hidden="true">↗</span></div><div class="monitor" aria-hidden="true"></div><p>${esc(d.gpu)} · ${esc(d.ram)}</p><span class="badge ${busy || !d.active ? "busy" : ""}">${!d.active ? "Inactive" : busy ? "Reserved" : "Available"}</span></a>`;
       }
       const page = document.body.dataset.page;
       if (page === "overview") {
-        $("#date-label").textContent = pretty(demoDate);
+        $("#block-kind").textContent = nowBlock.live
+          ? "Current time block"
+          : "Next time block";
+        $("#date-label").textContent = pretty(nowBlock.date);
+        $("#block-label").textContent = nowBlock.start + "–" + nowBlock.end;
         $("#stations").innerHTML = store.desks.map(card).join("");
-        $("#available").textContent = store.desks.filter(
-          (d) => d.active && !conflicts(d.id, demoDate, "16:00", "18:00"),
-        ).length;
-        const next = store.bookings
-          .filter(
-            (b) =>
-              b.status === "CONFIRMED" &&
-              new Date(b.date + "T" + b.end) > new Date(),
-          )
-          .sort((a, b) =>
-            (a.date + a.start).localeCompare(b.date + b.start),
-          )[0];
-        $("#next").innerHTML = next
-          ? `<h3>${esc(deskName(next.desk))}</h3><p>${pretty(next.date)} · ${next.start}–${next.end}</p><a class="link" href="03-space-details.html?desk=${next.desk}">View station →</a>`
-          : "<p>No upcoming reservations.</p>";
-        const active = store.bookings.filter(
-          (b) =>
-            b.status === "CONFIRMED" &&
-            new Date(b.date + "T" + b.start) <= new Date() &&
-            new Date(b.date + "T" + b.end) > new Date(),
-        );
-        $("#ongoing").innerHTML = active.length
-          ? active
-              .map(
-                (b) =>
-                  `<div class="listrow"><strong>${esc(deskName(b.desk))}</strong><span>${b.start}–${b.end}</span></div>`,
-              )
-              .join("")
-          : "<p>No sessions in progress right now.</p>";
       }
       if (page === "reservation") {
         const f = $("#booking");
-        f.date.value = demoDate;
-        f.date.min = dateText(new Date());
-        f.start.value = params.get("start") || "16:00";
-        f.end.value = params.get("end") || "18:00";
+        f.date.value = params.get("date") || demoDate;
+        f.date.min = today;
         f.desk.innerHTML = store.desks
           .filter((d) => d.active)
           .map(
@@ -219,19 +196,30 @@
           .join("");
         f.desk.value = params.get("desk") || "3";
         if (!f.desk.value) f.desk.selectedIndex = 0;
+        // List every block for the chosen station and date, marking ones that can't be booked.
+        function renderBlocks() {
+          const picked = f.block.value || params.get("block") || "16:00";
+          f.block.innerHTML = blocks
+            .map((b) => {
+              const past = new Date(f.date.value + "T" + b.start) < new Date();
+              const busy = conflicts(f.desk.value, f.date.value, b.start, b.end);
+              const note = past ? " · Started" : busy ? " · Reserved" : "";
+              return `<option value="${b.start}"${past || busy ? " disabled" : ""}>${b.start}–${b.end}${note}</option>`;
+            })
+            .join("");
+          f.block.value = picked;
+        }
+        renderBlocks();
+        f.desk.onchange = f.date.onchange = renderBlocks;
         let pending;
         function validate() {
           const v = Object.fromEntries(new FormData(f));
-          const start = new Date(v.date + "T" + v.start),
-            end = new Date(v.date + "T" + v.end),
-            mins = (end - start) / 60000;
+          const b = blocks.find((b) => b.start === v.block);
           let msg = "";
-          if (start < new Date())
-            msg = "Choose a start time that is not in the past.";
-          else if (mins < 30)
-            msg = "Reservations must be at least 30 minutes long.";
-          else if (mins > 720) msg = "Reservations cannot exceed 12 hours.";
-          else if (conflicts(v.desk, v.date, v.start, v.end))
+          if (!b) msg = "Choose one of the available time blocks.";
+          else if (new Date(v.date + "T" + b.start) < new Date())
+            msg = "Choose a time block that has not started yet.";
+          else if (conflicts(v.desk, v.date, b.start, b.end))
             msg = "This station is already booked during your selected time.";
           const eq = [...f.querySelectorAll("[name=equipment]:checked")].map(
             (i) => i.value,
@@ -242,7 +230,7 @@
               (b) =>
                 b.status === "CONFIRMED" &&
                 b.date === v.date &&
-                overlap(v.start, v.end, b.start, b.end) &&
+                b.start === v.block &&
                 b.equipment.some((e) => eq.includes(e)),
             )
           )
@@ -255,8 +243,8 @@
                 id: "CH-" + Date.now().toString().slice(-6),
                 desk: +v.desk,
                 date: v.date,
-                start: v.start,
-                end: v.end,
+                start: b.start,
+                end: b.end,
                 name: v.name,
                 equipment: eq,
                 status: "CONFIRMED",
@@ -292,13 +280,6 @@
         $("#gpu").textContent = d.gpu;
         $("#ram").textContent = d.ram;
         $("#reserve-desk").href = "02-reservation.html?desk=" + d.id;
-        $("#date-label").textContent = pretty(demoDate);
-        $("#schedule").innerHTML = Array.from({ length: 6 }, (_, i) => {
-          const s = String(10 + i * 2).padStart(2, "0") + ":00",
-            e = String(12 + i * 2).padStart(2, "0") + ":00";
-          const busy = !d.active || conflicts(d.id, demoDate, s, e);
-          return `<div class="listrow"><div><strong>${s}–${e}</strong><p>${!d.active ? "Station inactive" : busy ? "Reserved" : "Available"}</p></div>${busy ? '<span class="badge busy">Unavailable</span>' : `<a class="link" href="02-reservation.html?desk=${d.id}&start=${s}&end=${e}">Reserve →</a>`}</div>`;
-        }).join("");
       }
       if (page === "settings") {
         const f = $("#desk-editor");

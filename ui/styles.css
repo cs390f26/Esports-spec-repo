@@ -149,6 +149,9 @@ p {
   border-radius: 12px;
   background: var(--panel);
 }
+.narrow {
+  max-width: 816px;
+}
 .split {
   display: grid;
   grid-template-columns: 1.7fr 1fr;

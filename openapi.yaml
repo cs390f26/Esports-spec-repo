@@ -1,10 +1,12 @@
 openapi: 3.0.3
 info:
-  title: Esports Reservation System API
+  title: eSports Reservation System API
   version: 1.0.0
   description:
     API for spaces, computers, equipment, games, and reservations. Demo version with no sign-in. Uses
     integer IDs and ISO 8601 timestamps. Games and reservation-equipment links extend the original database schema.
+    Reservations use fixed 2-hour time blocks from 10:00 to 22:00 in the lounge's local time. A block is identified
+    by a date and a start hour (10, 12, 14, 16, 18, or 20).
 paths:
   /spaces:
     get:
@@ -52,6 +54,38 @@ paths:
             application/json:
               schema:
                 { type: array, items: { $ref: "#/components/schemas/Game" } }
+  /time-blocks:
+    get:
+      summary: List time blocks for a date
+      description: Returns the six bookable blocks for the date, in start order.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                {
+                  type: array,
+                  items: { $ref: "#/components/schemas/TimeBlock" },
+                }
+        "400": { $ref: "#/components/responses/Error" }
+  /time-blocks/current:
+    get:
+      summary: Get the current time block
+      description:
+        Returns the block in progress now. Outside lounge hours, returns the next block with in_progress set to
+        false. Used by the landing page.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimeBlock" }
   /spaces/{spaceId}:
     parameters:
       - name: spaceId
@@ -120,19 +154,17 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
   /availability:
     get:
-      summary: Check availability for a time period
-      description:
-        Returns bookable spaces and equipment. A snapshot, not a hold; booking rechecks availability.
-        Both timestamps require a timezone offset.
+      summary: Check availability for a time block
+      description: Returns bookable spaces and equipment for the block. A snapshot, not a hold; booking rechecks availability.
       parameters:
-        - name: start_time
+        - name: date
           in: query
           required: true
-          schema: { type: string, format: date-time }
-        - name: end_time
+          schema: { type: string, format: date }
+        - name: start_hour
           in: query
           required: true
-          schema: { type: string, format: date-time }
+          schema: { $ref: "#/components/schemas/StartHour" }
       responses:
         "200":
           description: Success
@@ -171,10 +203,10 @@ paths:
     post:
       summary: Create a reservation
       description:
-        Submit after user confirmation. Start must not be in the past; duration must be 30 minutes to
-        12 hours inclusive. The space must be active, the game supported, and all resources available for the full
-        interval. Reject overlapping confirmed bookings; back-to-back sessions are allowed. Check and book resources
-        atomically. Return 400 for invalid input, 404 for missing resources, or 409 for unavailable resources.
+        Submit after user confirmation. The request names a time block (date + start_hour); the server derives
+        start_time and end_time. The block must not have started. The space must be active, the game supported, and
+        all resources free for that block. Reject a second confirmed booking of the same resource in the same block;
+        back-to-back blocks are allowed. Check and book resources atomically. Return 400 for invalid input, 404 for missing resources, or 409 for unavailable resources.
       requestBody:
         required: true
         content:
@@ -298,10 +330,26 @@ components:
         serial_number: { type: string, nullable: true }
         status:
           { type: string, enum: [AVAILABLE, IN_USE, MAINTENANCE, OFFLINE] }
+    StartHour:
+      type: integer
+      enum: [10, 12, 14, 16, 18, 20]
+      description: Start hour of a 2-hour block, in the lounge's local time.
+    TimeBlock:
+      type: object
+      required: [date, start_hour, end_hour, start_time, end_time]
+      properties:
+        date: { type: string, format: date }
+        start_hour: { $ref: "#/components/schemas/StartHour" }
+        end_hour: { type: integer, enum: [12, 14, 16, 18, 20, 22] }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+        in_progress:
+          type: boolean
+          description: Only on /time-blocks/current. False when the lounge is closed and this is the next block.
     CreateReservation:
       type: object
       additionalProperties: false
-      required: [user_id, space_id, game_id, start_time, end_time]
+      required: [user_id, space_id, game_id, date, start_hour]
       properties:
         user_id: { type: string, minLength: 1 }
         space_id: { type: integer, minimum: 1 }
@@ -313,8 +361,8 @@ components:
             uniqueItems: true,
             default: [],
           }
-        start_time: { type: string, format: date-time }
-        end_time: { type: string, format: date-time }
+        date: { type: string, format: date }
+        start_hour: { $ref: "#/components/schemas/StartHour" }
     Reservation:
       type: object
       required:
