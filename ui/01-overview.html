@@ -12,7 +12,6 @@
         <a class="brand" href="01-overview.html">Esports Reservation System</a>
         <nav aria-label="Main navigation">
           <a href="01-overview.html" aria-current="page">Overview</a
-          ><a href="05-my-reservations.html">My reservations</a
           ><a href="04-settings.html">Settings</a>
         </nav>
         <span class="profile">ALEX / PLAYER</span>
@@ -116,7 +115,7 @@
             date: demoDate,
             start: "18:00",
             end: "20:00",
-            game: "Rocket League",
+            name: "Alex Rivera",
             equipment: ["Gaming headset"],
             status: "CONFIRMED",
           },
@@ -176,7 +175,7 @@
             (a.date + a.start).localeCompare(b.date + b.start),
           )[0];
         $("#next").innerHTML = next
-          ? `<h3>${esc(deskName(next.desk))}</h3><p>${pretty(next.date)} · ${next.start}–${next.end}</p><a class="link" href="05-my-reservations.html">View reservation →</a>`
+          ? `<h3>${esc(deskName(next.desk))}</h3><p>${pretty(next.date)} · ${next.start}–${next.end}</p><a class="link" href="03-space-details.html?desk=${next.desk}">View station →</a>`
           : "<p>No upcoming reservations.</p>";
         const active = store.bookings.filter(
           (b) =>
@@ -246,7 +245,7 @@
                 date: v.date,
                 start: v.start,
                 end: v.end,
-                game: v.game,
+                name: v.name,
                 equipment: eq,
                 status: "CONFIRMED",
               };
@@ -256,7 +255,7 @@
           pending = validate();
           if (!pending) return;
           $("#summary").innerHTML =
-            `<h3>${esc(deskName(pending.desk))}</h3><p>${pretty(pending.date)} · ${pending.start}–${pending.end}<br>${esc(pending.game)}<br>${pending.equipment.map(esc).join(", ") || "No additional equipment"}</p>`;
+            `<h3>${esc(deskName(pending.desk))}</h3><p>${pretty(pending.date)} · ${pending.start}–${pending.end}<br>${esc(pending.name)}<br>${pending.equipment.map(esc).join(", ") || "No additional equipment"}</p>`;
           $("#confirm").showModal();
         });
         $("#confirm-booking").onclick = () => {
@@ -266,7 +265,7 @@
             return;
           }
           store.bookings.push(pending);
-          if (save()) location.href = "05-my-reservations.html?booked=1";
+          if (save()) location.href = "01-overview.html?booked=1";
           else {
             store.bookings.pop();
             $("#confirm").close();
@@ -288,41 +287,6 @@
           const busy = !d.active || conflicts(d.id, demoDate, s, e);
           return `<div class="listrow"><div><strong>${s}–${e}</strong><p>${!d.active ? "Station inactive" : busy ? "Reserved" : "Available"}</p></div>${busy ? '<span class="badge busy">Unavailable</span>' : `<a class="link" href="02-reservation.html?desk=${d.id}&start=${s}&end=${e}">Reserve →</a>`}</div>`;
         }).join("");
-      }
-      if (page === "reservations") {
-        if (params.has("booked")) $("#success").hidden = false;
-        function render() {
-          $("#bookings").innerHTML = store.bookings.length
-            ? store.bookings
-                .map(
-                  (b) =>
-                    `<article class="panel"><div class="row"><div><span class="eyebrow">${esc(b.id)}</span><h2>${esc(deskName(b.desk))}</h2></div><span class="badge ${b.status === "CANCELLED" ? "busy" : ""}">${b.status === "CANCELLED" ? "Cancelled" : "Confirmed"}</span></div><p>${pretty(b.date)} · ${b.start}–${b.end}<br>${esc(b.game)} · ${b.equipment.map(esc).join(", ") || "No additional equipment"}</p>${b.status === "CONFIRMED" ? `<button data-cancel="${esc(b.id)}">Cancel reservation</button>` : ""}</article>`,
-                )
-                .join("")
-            : '<div class="panel empty"><h2>No reservations yet</h2><p>Pick a station and plan your next session.</p><a class="button primary" href="02-reservation.html">Make a reservation</a></div>';
-        }
-        render();
-        let cancelId;
-        $("#bookings").onclick = (e) => {
-          const b = e.target.closest("[data-cancel]");
-          if (b) {
-            cancelId = b.dataset.cancel;
-            $("#cancel-dialog").showModal();
-          }
-        };
-        $("#cancel-confirm").onclick = () => {
-          const b = store.bookings.find((b) => b.id === cancelId);
-          b.status = "CANCELLED";
-          if (save()) {
-            $("#cancel-dialog").close();
-            render();
-            $("#feedback").textContent =
-              "Reservation cancelled. Your station and equipment have been released.";
-          } else {
-            b.status = "CONFIRMED";
-            $("#cancel-dialog").close();
-          }
-        };
       }
       if (page === "settings") {
         const f = $("#desk-editor");
