@@ -95,3 +95,24 @@ Sample payloads for each table using the schema’s field names, integer IDs, an
   }
 ]
 ```
+
+---
+
+### 5: ReservationEquipment
+
+```json
+[
+  {
+    "reservation_id": 8801,
+    "equipment_id": 1
+  },
+  {
+    "reservation_id": 8801,
+    "equipment_id": 2
+  },
+  {
+    "reservation_id": 8802,
+    "equipment_id": 2
+  }
+]
+```

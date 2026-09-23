@@ -1,6 +1,6 @@
 # Gaming Lounge Database Schema
 
-This document describes the four tables in the provided schema diagram: `Spaces`, `Computers`, `Equipment`, and `Reservations`.
+This document describes the five tables in the provided schema diagram: `Spaces`, `Computers`, `Equipment`, `Reservations`, and `ReservationEquipment`.
 
 Primary keys use integer IDs. The diagram marks non-key fields with `?`, which appears to indicate that they are nullable; confirm this in the database definition before implementation. No defaults, status enums, or automatic ID generation are specified in the diagram.
 
@@ -43,6 +43,8 @@ Stores individual accessories, such as headsets and controllers.
 | `serial_number` | `VARCHAR(255)` | —           | Serial number associated with the item.            |
 | `status`        | `VARCHAR(255)` | —           | Item status, such as AVAILABLE or MAINTENANCE.     |
 
+`Equipment.equipment_id` is referenced by `ReservationEquipment.equipment_id`.
+
 ## Reservations
 
 Stores bookings for a space, including the user, scheduled interval, and reservation status.
@@ -56,5 +58,16 @@ Stores bookings for a space, including the user, scheduled interval, and reserva
 | `end_time`       | `TIMESTAMP`    | —                  | Scheduled end of the reservation.                  |
 | `status`         | `VARCHAR(255)` | —                  | Reservation state, such as CONFIRMED or CANCELLED. |
 | `created_at`     | `TIMESTAMP`    | —                  | Time the reservation record was created.           |
+
+`Reservations.reservation_id` is referenced by `ReservationEquipment.reservation_id`.
+
+## ReservationEquipment
+
+Join table associating a reservation with the equipment items checked out for it. A reservation can have multiple equipment items, and the same equipment item can appear across multiple reservations over time.
+
+| Column           | Type shown | Key / relationship                                     | Purpose                                     |
+| ---------------- | ---------- | ------------------------------------------------------ | ------------------------------------------- |
+| `reservation_id` | `INTEGER`  | Composite key; linked to `Reservations.reservation_id` | Reservation the equipment is assigned to.   |
+| `equipment_id`   | `INTEGER`  | Composite key; linked to `Equipment.equipment_id`      | Equipment item assigned to the reservation. |
 
 For JSON payloads, represent timestamps using ISO 8601, such as `2026-09-23T14:00:00Z`. The diagram does not specify database timezone handling or a default for `created_at`.
