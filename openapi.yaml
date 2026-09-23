@@ -1,0 +1,363 @@
+openapi: 3.0.3
+info:
+  title: Esports Reservation System API
+  version: 1.0.0
+  description:
+    API for spaces, computers, equipment, games, and reservations. Demo version with no sign-in. Uses
+    integer IDs and ISO 8601 timestamps. Games and reservation-equipment links extend the original database schema.
+paths:
+  /spaces:
+    get:
+      summary: List spaces
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                { type: array, items: { $ref: "#/components/schemas/Space" } }
+  /computers:
+    get:
+      summary: List computers
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                {
+                  type: array,
+                  items: { $ref: "#/components/schemas/Computer" },
+                }
+  /equipment:
+    get:
+      summary: List equipment
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                {
+                  type: array,
+                  items: { $ref: "#/components/schemas/Equipment" },
+                }
+  /games:
+    get:
+      summary: List games
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                { type: array, items: { $ref: "#/components/schemas/Game" } }
+  /spaces/{spaceId}:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    patch:
+      summary: Update space
+      description: Updates supplied fields only. Existing reservations are preserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpaceUpdate" }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Space" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /computers/{computerId}:
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    patch:
+      summary: Update computer
+      description: Updates supplied fields only. Existing reservations are preserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComputerUpdate" }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Computer" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /equipment/{equipmentId}:
+    parameters:
+      - name: equipmentId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    patch:
+      summary: Update equipment
+      description: Updates supplied fields only. Existing reservations are preserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EquipmentUpdate" }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Equipment" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /availability:
+    get:
+      summary: Check availability for a time period
+      description:
+        Returns bookable spaces and equipment. A snapshot, not a hold; booking rechecks availability.
+        Both timestamps require a timezone offset.
+      parameters:
+        - name: start_time
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: end_time
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Availability" }
+        "400": { $ref: "#/components/responses/Error" }
+  /reservations:
+    get:
+      summary: List reservations
+      description: Newest first. Filters are optional; active_only returns confirmed sessions currently in progress.
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: space_id
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: active_only
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                {
+                  type: array,
+                  items: { $ref: "#/components/schemas/Reservation" },
+                }
+        "400": { $ref: "#/components/responses/Error" }
+    post:
+      summary: Create a reservation
+      description:
+        Submit after user confirmation. Start must not be in the past; duration must be 30 minutes to
+        12 hours inclusive. The space must be active, the game supported, and all resources available for the full
+        interval. Reject overlapping confirmed bookings; back-to-back sessions are allowed. Check and book resources
+        atomically. Return 400 for invalid input, 404 for missing resources, or 409 for unavailable resources.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateReservation" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reservation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /reservations/{reservationId}:
+    parameters:
+      - name: reservationId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      summary: Get a reservation
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reservation" }
+        "404": { $ref: "#/components/responses/Error" }
+  /reservations/{reservationId}/cancel:
+    parameters:
+      - name: reservationId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      summary: Cancel a reservation
+      description:
+        Cancel before end_time and release the space and equipment. Already-cancelled bookings return
+        200; ended bookings return 409. History is retained.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reservation" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+components:
+  responses:
+    Error:
+      description: Request failed. See code and message for details.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Space:
+      type: object
+      required: [space_id, space_name, description, is_active]
+      additionalProperties: false
+      properties:
+        space_id: { type: integer, minimum: 1 }
+        space_name: { type: string }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+    Computer:
+      type: object
+      required: [computer_id, space_id, hostname, specs, status]
+      additionalProperties: false
+      properties:
+        computer_id: { type: integer, minimum: 1 }
+        space_id: { type: integer, minimum: 1 }
+        hostname: { type: string }
+        specs: { type: string, nullable: true }
+        status:
+          { type: string, enum: [AVAILABLE, IN_USE, MAINTENANCE, OFFLINE] }
+    Equipment:
+      type: object
+      required: [equipment_id, item_name, category, serial_number, status]
+      additionalProperties: false
+      properties:
+        equipment_id: { type: integer, minimum: 1 }
+        item_name: { type: string }
+        category: { type: string, enum: [HEADSET, CONTROLLER] }
+        serial_number: { type: string, nullable: true }
+        status:
+          { type: string, enum: [AVAILABLE, IN_USE, MAINTENANCE, OFFLINE] }
+    Game:
+      type: object
+      required: [game_id, name, is_active, space_ids]
+      additionalProperties: false
+      properties:
+        game_id: { type: integer, minimum: 1 }
+        name: { type: string }
+        is_active: { type: boolean }
+        space_ids: { type: array, items: { type: integer }, uniqueItems: true }
+    SpaceUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        space_name: { type: string }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+    ComputerUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        hostname: { type: string }
+        specs: { type: string, nullable: true }
+        status:
+          { type: string, enum: [AVAILABLE, IN_USE, MAINTENANCE, OFFLINE] }
+    EquipmentUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        item_name: { type: string }
+        category: { type: string, enum: [HEADSET, CONTROLLER] }
+        serial_number: { type: string, nullable: true }
+        status:
+          { type: string, enum: [AVAILABLE, IN_USE, MAINTENANCE, OFFLINE] }
+    CreateReservation:
+      type: object
+      additionalProperties: false
+      required: [user_id, space_id, game_id, start_time, end_time]
+      properties:
+        user_id: { type: string, minLength: 1 }
+        space_id: { type: integer, minimum: 1 }
+        game_id: { type: integer, minimum: 1 }
+        equipment_ids:
+          {
+            type: array,
+            items: { type: integer, minimum: 1 },
+            uniqueItems: true,
+            default: [],
+          }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+    Reservation:
+      type: object
+      required:
+        [
+          reservation_id,
+          user_id,
+          space_id,
+          game_id,
+          equipment_ids,
+          start_time,
+          end_time,
+          status,
+          created_at,
+        ]
+      properties:
+        reservation_id: { type: integer }
+        user_id: { type: string, minLength: 1 }
+        space_id: { type: integer, minimum: 1 }
+        game_id: { type: integer, minimum: 1 }
+        equipment_ids:
+          {
+            type: array,
+            items: { type: integer, minimum: 1 },
+            uniqueItems: true,
+            default: [],
+          }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+        status: { type: string, enum: [CONFIRMED, CANCELLED, COMPLETED] }
+        created_at: { type: string, format: date-time }
+    Availability:
+      type: object
+      required: [space_ids, equipment_ids]
+      properties:
+        space_ids: { type: array, items: { type: integer } }
+        equipment_ids: { type: array, items: { type: integer } }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: SPACE_BOOKED }
+        message:
+          {
+            type: string,
+            example: This space is already booked during the selected time.,
+          }

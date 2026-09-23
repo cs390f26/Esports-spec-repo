@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Overview · Esports Reservation System</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="overview">
+    <header>
+      <div class="header">
+        <a class="brand" href="01-overview.html">Esports Reservation System</a>
+        <nav aria-label="Main navigation">
+          <a href="01-overview.html" aria-current="page">Overview</a
+          ><a href="05-my-reservations.html">My reservations</a
+          ><a href="04-settings.html">Settings</a>
+        </nav>
+        <span class="profile">ALEX / PLAYER</span>
+      </div>
+    </header>
+    <main>
+      <div class="title-row">
+        <div>
+          <div class="eyebrow">Your next session starts here</div>
+          <h1>Find your station.</h1>
+          <p>Choose your setup. Make it game time.</p>
+        </div>
+        <a class="button primary" href="02-reservation.html"
+          >+ Make a reservation</a
+        >
+      </div>
+      <div class="split">
+        <section class="panel">
+          <div class="row">
+            <h2>Arena stations</h2>
+            <span class="badge">6 stations</span>
+          </div>
+          <p><span id="date-label"></span> · 16:00–18:00</p>
+          <div class="grid" id="stations"></div>
+          <p class="help">
+            Availability is for the time above. Select a station for its
+            schedule.
+          </p>
+        </section>
+        <aside class="stack">
+          <section class="panel">
+            <div class="eyebrow">The arena</div>
+            <h2>Your setup is waiting.</h2>
+            <p>Six gaming stations. One place to play.</p>
+            <div class="stats">
+              <div><strong>06</strong><span>Stations</span></div>
+              <div>
+                <strong id="available">04</strong
+                ><span>Available in this slot</span>
+              </div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="eyebrow">Your next session</div>
+            <div id="next"></div>
+          </section>
+        </aside>
+      </div>
+      <section class="panel layout-1">
+        <h2>Happening now</h2>
+        <div id="ongoing"></div>
+      </section>
+      <noscript
+        ><p>
+          Enable JavaScript to display the sample stations and use the booking
+          flow.
+        </p></noscript
+      >
+    </main>
+    <footer>
+      <span>Esports Reservation System</span
+      ><span>Interactive mockup · Sample data</span>
+    </footer>
+    <script>
+      const $ = (s) => document.querySelector(s);
+      const params = new URLSearchParams(location.search);
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      const key = "nexus-simplified-v1";
+      let store;
+      try {
+        store = JSON.parse(localStorage.getItem(key));
+      } catch {}
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateText = (d) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const demoDate = dateText(tomorrow);
+      store = store || {
+        desks: Array.from({ length: 6 }, (_, i) => ({
+          id: i + 1,
+          name: `Desk ${String(i + 1).padStart(2, "0")}`,
+          gpu: i === 2 ? "RTX 4070" : i === 5 ? "RTX 4080" : "RTX 4060",
+          ram: i === 2 || i === 5 ? "32 GB" : "16 GB",
+          active: true,
+        })),
+        bookings: [
+          {
+            id: "CH-4092",
+            desk: 6,
+            date: demoDate,
+            start: "18:00",
+            end: "20:00",
+            game: "Rocket League",
+            equipment: ["Gaming headset"],
+            status: "CONFIRMED",
+          },
+        ],
+      };
+      function save() {
+        try {
+          localStorage.setItem(key, JSON.stringify(store));
+          return true;
+        } catch {
+          $("#feedback").textContent =
+            "Your browser could not save these changes. Please allow local storage and try again.";
+          return false;
+        }
+      }
+      const pretty = (d) =>
+        new Date(d + "T12:00").toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      const deskName = (id) =>
+        store.desks.find((d) => d.id === Number(id))?.name || "Station";
+      const overlap = (a, b, c, d) => a < d && b > c;
+      function conflicts(d, date, start, end) {
+        return (
+          (date === demoDate &&
+            [2, 5].includes(+d) &&
+            overlap(start, end, "16:00", "18:00")) ||
+          store.bookings.some(
+            (b) =>
+              b.status === "CONFIRMED" &&
+              b.desk === +d &&
+              b.date === date &&
+              overlap(start, end, b.start, b.end),
+          )
+        );
+      }
+      function card(d) {
+        const busy = conflicts(d.id, demoDate, "16:00", "18:00");
+        return `<a class="station" href="03-space-details.html?desk=${d.id}"><div class="row"><strong>${esc(d.name)}</strong><span aria-hidden="true">↗</span></div><div class="monitor" aria-hidden="true"></div><p>${esc(d.gpu)} · ${esc(d.ram)}</p><span class="badge ${busy || !d.active ? "busy" : ""}">${!d.active ? "Inactive" : busy ? "Reserved" : "Available"}</span></a>`;
+      }
+      const page = document.body.dataset.page;
+      if (page === "overview") {
+        $("#date-label").textContent = pretty(demoDate);
+        $("#stations").innerHTML = store.desks.map(card).join("");
+        $("#available").textContent = store.desks.filter(
+          (d) => d.active && !conflicts(d.id, demoDate, "16:00", "18:00"),
+        ).length;
+        const next = store.bookings
+          .filter(
+            (b) =>
+              b.status === "CONFIRMED" &&
+              new Date(b.date + "T" + b.end) > new Date(),
+          )
+          .sort((a, b) =>
+            (a.date + a.start).localeCompare(b.date + b.start),
+          )[0];
+        $("#next").innerHTML = next
+          ? `<h3>${esc(deskName(next.desk))}</h3><p>${pretty(next.date)} · ${next.start}–${next.end}</p><a class="link" href="05-my-reservations.html">View reservation →</a>`
+          : "<p>No upcoming reservations.</p>";
+        const active = store.bookings.filter(
+          (b) =>
+            b.status === "CONFIRMED" &&
+            new Date(b.date + "T" + b.start) <= new Date() &&
+            new Date(b.date + "T" + b.end) > new Date(),
+        );
+        $("#ongoing").innerHTML = active.length
+          ? active
+              .map(
+                (b) =>
+                  `<div class="listrow"><strong>${esc(deskName(b.desk))}</strong><span>${b.start}–${b.end}</span></div>`,
+              )
+              .join("")
+          : "<p>No sessions in progress right now.</p>";
+      }
+      if (page === "reservation") {
+        const f = $("#booking");
+        f.date.value = demoDate;
+        f.date.min = dateText(new Date());
+        f.start.value = params.get("start") || "16:00";
+        f.end.value = params.get("end") || "18:00";
+        f.desk.innerHTML = store.desks
+          .filter((d) => d.active)
+          .map(
+            (d) =>
+              `<option value="${d.id}">${esc(d.name)} · ${esc(d.gpu)}</option>`,
+          )
+          .join("");
+        f.desk.value = params.get("desk") || "3";
+        if (!f.desk.value) f.desk.selectedIndex = 0;
+        let pending;
+        function validate() {
+          const v = Object.fromEntries(new FormData(f));
+          const start = new Date(v.date + "T" + v.start),
+            end = new Date(v.date + "T" + v.end),
+            mins = (end - start) / 60000;
+          let msg = "";
+          if (start < new Date())
+            msg = "Choose a start time that is not in the past.";
+          else if (mins < 30)
+            msg = "Reservations must be at least 30 minutes long.";
+          else if (mins > 720) msg = "Reservations cannot exceed 12 hours.";
+          else if (conflicts(v.desk, v.date, v.start, v.end))
+            msg = "This station is already booked during your selected time.";
+          const eq = [...f.querySelectorAll("[name=equipment]:checked")].map(
+            (i) => i.value,
+          );
+          if (
+            !msg &&
+            store.bookings.some(
+              (b) =>
+                b.status === "CONFIRMED" &&
+                b.date === v.date &&
+                overlap(v.start, v.end, b.start, b.end) &&
+                b.equipment.some((e) => eq.includes(e)),
+            )
+          )
+            msg =
+              "Selected equipment is already in use during this time. Remove it or choose another time.";
+          $("#feedback").textContent = msg;
+          return msg
+            ? null
+            : {
+                id: "CH-" + Date.now().toString().slice(-6),
+                desk: +v.desk,
+                date: v.date,
+                start: v.start,
+                end: v.end,
+                game: v.game,
+                equipment: eq,
+                status: "CONFIRMED",
+              };
+        }
+        f.addEventListener("submit", (e) => {
+          e.preventDefault();
+          pending = validate();
+          if (!pending) return;
+          $("#summary").innerHTML =
+            `<h3>${esc(deskName(pending.desk))}</h3><p>${pretty(pending.date)} · ${pending.start}–${pending.end}<br>${esc(pending.game)}<br>${pending.equipment.map(esc).join(", ") || "No additional equipment"}</p>`;
+          $("#confirm").showModal();
+        });
+        $("#confirm-booking").onclick = () => {
+          pending = validate();
+          if (!pending) {
+            $("#confirm").close();
+            return;
+          }
+          store.bookings.push(pending);
+          if (save()) location.href = "05-my-reservations.html?booked=1";
+          else {
+            store.bookings.pop();
+            $("#confirm").close();
+          }
+        };
+      }
+      if (page === "details") {
+        const d =
+          store.desks.find((d) => d.id === +(params.get("desk") || 3)) ||
+          store.desks[2];
+        $("#desk-title").textContent = d.name;
+        $("#gpu").textContent = d.gpu;
+        $("#ram").textContent = d.ram;
+        $("#reserve-desk").href = "02-reservation.html?desk=" + d.id;
+        $("#date-label").textContent = pretty(demoDate);
+        $("#schedule").innerHTML = Array.from({ length: 6 }, (_, i) => {
+          const s = String(10 + i * 2).padStart(2, "0") + ":00",
+            e = String(12 + i * 2).padStart(2, "0") + ":00";
+          const busy = !d.active || conflicts(d.id, demoDate, s, e);
+          return `<div class="listrow"><div><strong>${s}–${e}</strong><p>${!d.active ? "Station inactive" : busy ? "Reserved" : "Available"}</p></div>${busy ? '<span class="badge busy">Unavailable</span>' : `<a class="link" href="02-reservation.html?desk=${d.id}&start=${s}&end=${e}">Reserve →</a>`}</div>`;
+        }).join("");
+      }
+      if (page === "reservations") {
+        if (params.has("booked")) $("#success").hidden = false;
+        function render() {
+          $("#bookings").innerHTML = store.bookings.length
+            ? store.bookings
+                .map(
+                  (b) =>
+                    `<article class="panel"><div class="row"><div><span class="eyebrow">${esc(b.id)}</span><h2>${esc(deskName(b.desk))}</h2></div><span class="badge ${b.status === "CANCELLED" ? "busy" : ""}">${b.status === "CANCELLED" ? "Cancelled" : "Confirmed"}</span></div><p>${pretty(b.date)} · ${b.start}–${b.end}<br>${esc(b.game)} · ${b.equipment.map(esc).join(", ") || "No additional equipment"}</p>${b.status === "CONFIRMED" ? `<button data-cancel="${esc(b.id)}">Cancel reservation</button>` : ""}</article>`,
+                )
+                .join("")
+            : '<div class="panel empty"><h2>No reservations yet</h2><p>Pick a station and plan your next session.</p><a class="button primary" href="02-reservation.html">Make a reservation</a></div>';
+        }
+        render();
+        let cancelId;
+        $("#bookings").onclick = (e) => {
+          const b = e.target.closest("[data-cancel]");
+          if (b) {
+            cancelId = b.dataset.cancel;
+            $("#cancel-dialog").showModal();
+          }
+        };
+        $("#cancel-confirm").onclick = () => {
+          const b = store.bookings.find((b) => b.id === cancelId);
+          b.status = "CANCELLED";
+          if (save()) {
+            $("#cancel-dialog").close();
+            render();
+            $("#feedback").textContent =
+              "Reservation cancelled. Your station and equipment have been released.";
+          } else {
+            b.status = "CONFIRMED";
+            $("#cancel-dialog").close();
+          }
+        };
+      }
+      if (page === "settings") {
+        const f = $("#desk-editor");
+        function edit(id) {
+          const d = store.desks.find((d) => d.id === +id);
+          f.desk.value = d.id;
+          f.name.value = d.name;
+          f.gpu.value = d.gpu;
+          f.ram.value = d.ram;
+          f.active.value = String(d.active);
+          $("#edit-heading").textContent = "Edit " + d.name;
+        }
+        function render() {
+          $("#desk-rows").innerHTML = store.desks
+            .map(
+              (d) =>
+                `<tr><td>${esc(d.name)}</td><td>${esc(d.gpu)} / ${esc(d.ram)}</td><td><span class="badge ${d.active ? "" : "busy"}">${d.active ? "Active" : "Inactive"}</span></td><td><button data-edit="${d.id}">Edit</button></td></tr>`,
+            )
+            .join("");
+        }
+        render();
+        edit(3);
+        $("#desk-rows").onclick = (e) => {
+          const b = e.target.closest("[data-edit]");
+          if (b) edit(b.dataset.edit);
+        };
+        f.onsubmit = (e) => {
+          e.preventDefault();
+          const d = store.desks.find((d) => d.id === +f.desk.value);
+          const prev = { ...d };
+          Object.assign(d, {
+            name: f.name.value.trim(),
+            gpu: f.gpu.value.trim(),
+            ram: f.ram.value.trim(),
+            active: f.active.value === "true",
+          });
+          if (save()) {
+            render();
+            $("#feedback").textContent = "Station changes saved.";
+          } else Object.assign(d, prev);
+        };
+      }
+      document
+        .querySelectorAll("[data-close]")
+        .forEach((b) => (b.onclick = () => b.closest("dialog").close()));
+    </script>
+  </body>
+</html>
