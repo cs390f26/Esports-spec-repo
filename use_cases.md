@@ -16,6 +16,7 @@
 
 **Expected result:** The user can identify a suitable space and begin booking it. Availability in the current block is distinct from availability for a future block.
 
+
 ### 2. Choose Reservation Details
 
 1. The user selects a space.
