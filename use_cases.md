@@ -2,9 +2,9 @@
 
 ## Happy Path: Reserve a Space
 
-**Goal:** A user books an available space, selects a game, and optionally adds equipment.
+**Goal:** A user books an available space and optionally adds equipment.
 
-**Preconditions:** The system has spaces and a game catalog available. The selected space and any requested equipment are available for the requested time block.
+**Preconditions:** The system has spaces and equipment available. The selected space and any requested equipment are available for the requested time block.
 
 **Time blocks:** Reservations are made in fixed 2-hour blocks from 10:00 to 22:00 in the lounge's local time: 10:00–12:00, 12:00–14:00, 14:00–16:00, 16:00–18:00, 18:00–20:00, and 20:00–22:00. A block is identified by a date and an hour range. Users cannot choose custom start or end times.
 
@@ -24,18 +24,17 @@
 3. The system checks that the block has not started.
 4. The system verifies that the space is available for the selected block.
 5. The user optionally selects equipment. The system shows which items are available for the selected block.
-6. The user selects a game from the catalog of games supported by the selected system.
-7. The user proceeds to review the reservation.
+6. The user proceeds to review the reservation.
 
-**Expected result:** The user has selected a valid space, time block, and game, with or without optional equipment.
+**Expected result:** The user has selected a valid space and time block, with or without optional equipment.
 
 ### 3. Review and Confirm
 
-1. The system displays a summary containing the space, date, time block, selected game, and any equipment.
+1. The system displays a summary containing the space, date, time block, and any equipment.
 2. The system asks, “Are you sure you want to schedule this reservation?”
 3. The user can return to edit the details or confirm the booking.
 4. The user confirms the reservation.
-5. The system rechecks availability and saves the reservation with its selected game and equipment. The availability check and booking must prevent competing users from booking the same resources in the same block.
+5. The system rechecks availability and saves the reservation with its selected equipment. The availability check and booking must prevent competing users from booking the same resources in the same block.
 
 **Expected result:** A confirmed reservation is created, and the space and selected equipment are reserved for that block.
 
@@ -45,11 +44,11 @@
 2. The user can review the confirmed booking.
 3. The system updates availability for the booked block. When the block begins, the reservation appears among the ongoing reservations on the home page.
 
-**Success outcome:** The user knows the booking succeeded and can clearly see where and when to arrive, what game they selected, and which equipment is included.
+**Success outcome:** The user knows the booking succeeded and can clearly see where and when to arrive and which equipment is included.
 
 ## Alternate Happy Path: Reserve Without Equipment
 
-The user follows the same booking flow but skips equipment selection. The review and confirmation screens show “No additional equipment.” The reservation succeeds as long as the space, time block, and game selection are valid.
+The user follows the same booking flow but skips equipment selection. The review and confirmation screens show “No additional equipment.” The reservation succeeds as long as the space and time block are valid.
 
 ## Validation and Error Cases
 

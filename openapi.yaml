@@ -8,16 +8,16 @@ info:
     Reservations use fixed 2-hour time blocks from 10:00 to 22:00 in the lounge's local time. A block is identified
     by a date and a start hour (10, 12, 14, 16, 18, or 20).
 paths:
-  /catalog:
+  /inventory:
     get:
-      summary: Get the catalog
+      summary: Get the inventory
       description: Returns all spaces, computers, and equipment in one response. Used by every page.
       responses:
         "200":
           description: Success
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Catalog" }
+              schema: { $ref: "#/components/schemas/Inventory" }
         "400": { $ref: "#/components/responses/InvalidRequest" }
   /spaces/{spaceId}:
     parameters:
@@ -467,7 +467,7 @@ components:
               type: array
               items: { type: integer }
               description: Equipment with no confirmed booking in this block.
-    Catalog:
+    Inventory:
       type: object
       required: [spaces, computers, equipment]
       additionalProperties: false
