@@ -63,11 +63,9 @@ The overview page should load. Use `http://`, not `https://`; the script does no
 
 ## 5. (Optional) Connect over SSH
 
-Amazon Linux uses `ec2-user`.
-
 ```bash
 chmod 400 your-key.pem
-ssh -i your-key.pem ubuntu@<elastic-ip>
+ssh -i your-key.pem ec2-user@<elastic-ip>
 ```
 
 Once connected, these commands confirm each part of the setup:
