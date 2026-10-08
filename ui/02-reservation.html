@@ -21,6 +21,7 @@
       <div class="eyebrow">Book your station</div>
       <h1>Make a reservation</h1>
       <p>A space to play, with everything you need.</p>
+      <p id="load-error" class="error" role="alert" hidden></p>
       <div class="step">
         <b>01 Select your session</b> &nbsp; / &nbsp; 02 Review & confirm
       </div>
@@ -47,26 +48,7 @@
         </p>
         <div class="divider">
           <h2>Add equipment <small>· optional</small></h2>
-          <label class="check"
-            ><input
-              type="checkbox"
-              name="equipment"
-              value="Xbox Wireless Controller"
-            /><span>Xbox Wireless Controller</span
-            ><small>1 item</small></label
-          ><label class="check"
-            ><input
-              type="checkbox"
-              name="equipment"
-              value="DualSense Controller"
-            /><span>DualSense Controller</span><small>1 item</small></label
-          ><label class="check"
-            ><input
-              type="checkbox"
-              name="equipment"
-              value="Gaming headset"
-            /><span>Gaming headset</span><small>1 item</small></label
-          >
+          <div id="equipment-list"></div>
         </div>
         <p id="feedback" class="error" role="alert"></p>
         <button class="primary" type="submit">Review reservation →</button>
@@ -77,270 +59,22 @@
         <div id="summary"></div>
         <p>Your station and equipment will be reserved for this session.</p>
         <div class="row">
-          <button data-close>Keep editing</button
-          ><button class="primary" id="confirm-booking">Confirm booking</button>
+          <button type="button" data-close>Keep editing</button
+          ><button class="primary" type="button" id="confirm-booking">
+            Confirm booking
+          </button>
         </div>
       </dialog>
       <noscript
         ><p>
-          Enable JavaScript to display the sample stations and use the booking
-          flow.
+          Enable JavaScript to display the stations and use the booking flow.
         </p></noscript
       >
     </main>
     <footer>
       <span>Esports Reservation System</span
-      ><span>Interactive mockup · Sample data</span>
+      ><span>Connected to the lounge database</span>
     </footer>
-    <script>
-      const $ = (s) => document.querySelector(s);
-      const params = new URLSearchParams(location.search);
-      const esc = (s) =>
-        String(s).replace(
-          /[&<>"']/g,
-          (c) =>
-            ({
-              "&": "&amp;",
-              "<": "&lt;",
-              ">": "&gt;",
-              '"': "&quot;",
-              "'": "&#39;",
-            })[c],
-        );
-      const key = "nexus-simplified-v1";
-      let store;
-      try {
-        store = JSON.parse(localStorage.getItem(key));
-      } catch {}
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dateText = (d) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const demoDate = dateText(tomorrow);
-      // Reservations are fixed 2-hour blocks from 10:00 to 22:00 local time.
-      const hh = (h) => String(h).padStart(2, "0") + ":00";
-      const blocks = [10, 12, 14, 16, 18, 20].map((h) => ({
-        start: hh(h),
-        end: hh(h + 2),
-      }));
-      const now = new Date();
-      const today = dateText(now);
-      // The block in progress now, or the next one when the lounge is closed.
-      const nowBlock = (() => {
-        const b = blocks.find((b) => new Date(today + "T" + b.end) > now);
-        return b
-          ? { date: today, ...b, live: new Date(today + "T" + b.start) <= now }
-          : { date: demoDate, ...blocks[0], live: false };
-      })();
-      store = store || {
-        desks: Array.from({ length: 6 }, (_, i) => ({
-          id: i + 1,
-          name: `Desk ${String(i + 1).padStart(2, "0")}`,
-          gpu: i === 2 ? "RTX 4070" : i === 5 ? "RTX 4080" : "RTX 4060",
-          ram: i === 2 || i === 5 ? "32 GB" : "16 GB",
-          active: true,
-        })),
-        bookings: [
-          {
-            id: "CH-4092",
-            desk: 6,
-            date: demoDate,
-            start: "18:00",
-            end: "20:00",
-            name: "Isaac Nunez",
-            equipment: ["Gaming headset"],
-            status: "CONFIRMED",
-          },
-        ],
-      };
-      function save() {
-        try {
-          localStorage.setItem(key, JSON.stringify(store));
-          return true;
-        } catch {
-          $("#feedback").textContent =
-            "Your browser could not save these changes. Please allow local storage and try again.";
-          return false;
-        }
-      }
-      const pretty = (d) =>
-        new Date(d + "T12:00").toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-      const deskName = (id) =>
-        store.desks.find((d) => d.id === Number(id))?.name || "Station";
-      const overlap = (a, b, c, d) => a < d && b > c;
-      function conflicts(d, date, start, end) {
-        return (
-          (date === nowBlock.date &&
-            [2, 5].includes(+d) &&
-            overlap(start, end, nowBlock.start, nowBlock.end)) ||
-          store.bookings.some(
-            (b) =>
-              b.status === "CONFIRMED" &&
-              b.desk === +d &&
-              b.date === date &&
-              overlap(start, end, b.start, b.end),
-          )
-        );
-      }
-      function card(d) {
-        const busy = conflicts(d.id, nowBlock.date, nowBlock.start, nowBlock.end);
-        return `<a class="station" href="03-space-details.html?desk=${d.id}"><div class="row"><strong>${esc(d.name)}</strong><span aria-hidden="true">↗</span></div><div class="monitor" aria-hidden="true"></div><p>${esc(d.gpu)} · ${esc(d.ram)}</p><span class="badge ${busy || !d.active ? "busy" : ""}">${!d.active ? "Inactive" : busy ? "Reserved" : "Available"}</span></a>`;
-      }
-      const page = document.body.dataset.page;
-      if (page === "overview") {
-        $("#block-kind").textContent = nowBlock.live
-          ? "Current time block"
-          : "Next time block";
-        $("#date-label").textContent = pretty(nowBlock.date);
-        $("#block-label").textContent = nowBlock.start + "–" + nowBlock.end;
-        $("#stations").innerHTML = store.desks.map(card).join("");
-      }
-      if (page === "reservation") {
-        const f = $("#booking");
-        f.date.value = params.get("date") || demoDate;
-        f.date.min = today;
-        f.desk.innerHTML = store.desks
-          .filter((d) => d.active)
-          .map(
-            (d) =>
-              `<option value="${d.id}">${esc(d.name)} · ${esc(d.gpu)}</option>`,
-          )
-          .join("");
-        f.desk.value = params.get("desk") || "3";
-        if (!f.desk.value) f.desk.selectedIndex = 0;
-        // List every block for the chosen station and date, marking ones that can't be booked.
-        function renderBlocks() {
-          const picked = f.block.value || params.get("block") || "16:00";
-          f.block.innerHTML = blocks
-            .map((b) => {
-              const past = new Date(f.date.value + "T" + b.start) < new Date();
-              const busy = conflicts(f.desk.value, f.date.value, b.start, b.end);
-              const note = past ? " · Started" : busy ? " · Reserved" : "";
-              return `<option value="${b.start}"${past || busy ? " disabled" : ""}>${b.start}–${b.end}${note}</option>`;
-            })
-            .join("");
-          f.block.value = picked;
-        }
-        renderBlocks();
-        f.desk.onchange = f.date.onchange = renderBlocks;
-        let pending;
-        function validate() {
-          const v = Object.fromEntries(new FormData(f));
-          const b = blocks.find((b) => b.start === v.block);
-          let msg = "";
-          if (!b) msg = "Choose one of the available time blocks.";
-          else if (new Date(v.date + "T" + b.start) < new Date())
-            msg = "Choose a time block that has not started yet.";
-          else if (conflicts(v.desk, v.date, b.start, b.end))
-            msg = "This station is already booked during your selected time.";
-          const eq = [...f.querySelectorAll("[name=equipment]:checked")].map(
-            (i) => i.value,
-          );
-          if (
-            !msg &&
-            store.bookings.some(
-              (b) =>
-                b.status === "CONFIRMED" &&
-                b.date === v.date &&
-                b.start === v.block &&
-                b.equipment.some((e) => eq.includes(e)),
-            )
-          )
-            msg =
-              "Selected equipment is already in use during this time. Remove it or choose another time.";
-          $("#feedback").textContent = msg;
-          return msg
-            ? null
-            : {
-                id: "CH-" + Date.now().toString().slice(-6),
-                desk: +v.desk,
-                date: v.date,
-                start: b.start,
-                end: b.end,
-                name: v.name,
-                equipment: eq,
-                status: "CONFIRMED",
-              };
-        }
-        f.addEventListener("submit", (e) => {
-          e.preventDefault();
-          pending = validate();
-          if (!pending) return;
-          $("#summary").innerHTML =
-            `<h3>${esc(deskName(pending.desk))}</h3><p>${pretty(pending.date)} · ${pending.start}–${pending.end}<br>${esc(pending.name)}<br>${pending.equipment.map(esc).join(", ") || "No additional equipment"}</p>`;
-          $("#confirm").showModal();
-        });
-        $("#confirm-booking").onclick = () => {
-          pending = validate();
-          if (!pending) {
-            $("#confirm").close();
-            return;
-          }
-          store.bookings.push(pending);
-          if (save()) location.href = "01-overview.html?booked=1";
-          else {
-            store.bookings.pop();
-            $("#confirm").close();
-          }
-        };
-      }
-      if (page === "details") {
-        const d =
-          store.desks.find((d) => d.id === +(params.get("desk") || 3)) ||
-          store.desks[2];
-        $("#desk-title").textContent = d.name;
-        $("#gpu").textContent = d.gpu;
-        $("#ram").textContent = d.ram;
-        $("#reserve-desk").href = "02-reservation.html?desk=" + d.id;
-      }
-      if (page === "settings") {
-        const f = $("#desk-editor");
-        function edit(id) {
-          const d = store.desks.find((d) => d.id === +id);
-          f.desk.value = d.id;
-          f.name.value = d.name;
-          f.gpu.value = d.gpu;
-          f.ram.value = d.ram;
-          f.active.value = String(d.active);
-          $("#edit-heading").textContent = "Edit " + d.name;
-        }
-        function render() {
-          $("#desk-rows").innerHTML = store.desks
-            .map(
-              (d) =>
-                `<tr><td>${esc(d.name)}</td><td>${esc(d.gpu)} / ${esc(d.ram)}</td><td><span class="badge ${d.active ? "" : "busy"}">${d.active ? "Active" : "Inactive"}</span></td><td><button data-edit="${d.id}">Edit</button></td></tr>`,
-            )
-            .join("");
-        }
-        render();
-        edit(3);
-        $("#desk-rows").onclick = (e) => {
-          const b = e.target.closest("[data-edit]");
-          if (b) edit(b.dataset.edit);
-        };
-        f.onsubmit = (e) => {
-          e.preventDefault();
-          const d = store.desks.find((d) => d.id === +f.desk.value);
-          const prev = { ...d };
-          Object.assign(d, {
-            name: f.name.value.trim(),
-            gpu: f.gpu.value.trim(),
-            ram: f.ram.value.trim(),
-            active: f.active.value === "true",
-          });
-          if (save()) {
-            render();
-            $("#feedback").textContent = "Station changes saved.";
-          } else Object.assign(d, prev);
-        };
-      }
-      document
-        .querySelectorAll("[data-close]")
-        .forEach((b) => (b.onclick = () => b.closest("dialog").close()));
-    </script>
+    <script src="app.js"></script>
   </body>
 </html>

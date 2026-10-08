@@ -26,13 +26,15 @@ a {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button,
 a,
 input,
-select {
+select,
+textarea {
   touch-action: manipulation;
 }
 button,
@@ -270,7 +272,8 @@ label {
   font-weight: 600;
 }
 input:not([type="checkbox"]),
-select {
+select,
+textarea {
   display: block;
   width: 100%;
   background: #0f141a;
@@ -279,6 +282,10 @@ select {
   padding: 12px;
   color: var(--text);
   margin-top: 7px;
+}
+textarea {
+  min-height: 88px;
+  resize: vertical;
 }
 input[type="checkbox"] {
   accent-color: var(--accent);
