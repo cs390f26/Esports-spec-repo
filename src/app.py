@@ -7,6 +7,7 @@ from flask import Flask, g, jsonify, redirect, request
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE = os.path.join(BASE_DIR, "esports.db")
 START_HOURS = (10, 12, 14, 16, 18, 20)
+COMPUTER_STATUSES = ("AVAILABLE", "IN_USE", "MAINTENANCE", "OFFLINE")
 
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "ui"), static_url_path="")
 
@@ -26,8 +27,10 @@ def close_db(_exc):
         db.close()
 
 
-def error(status, code, message):
-    return jsonify(code=code, message=message), status
+def error(status, code, message, **extra):
+    body = {"code": code, "message": message}
+    body.update({key: value for key, value in extra.items() if value is not None})
+    return jsonify(body), status
 
 
 def parse_date(value):
@@ -50,6 +53,35 @@ def iso_time(value):
     return value.replace(" ", "T")
 
 
+def space_json(row):
+    return {
+        "space_id": row["space_id"],
+        "space_name": row["space_name"],
+        "description": row["description"],
+        "is_active": bool(row["is_active"]),
+    }
+
+
+def computer_json(row):
+    return {
+        "computer_id": row["computer_id"],
+        "space_id": row["space_id"],
+        "hostname": row["hostname"],
+        "specs": row["specs"],
+        "status": row["status"],
+    }
+
+
+def equipment_json(row):
+    return {
+        "equipment_id": row["equipment_id"],
+        "item_name": row["item_name"],
+        "category": row["category"],
+        "serial_number": row["serial_number"],
+        "status": row["status"],
+    }
+
+
 def reservation_json(db, row):
     equipment_ids = [
         r["equipment_id"]
@@ -70,60 +102,8 @@ def reservation_json(db, row):
     }
 
 
-@app.get("/")
-def index():
-    return redirect("/01-overview.html")
-
-
-@app.get("/spaces")
-def list_spaces():
-    rows = get_db().execute("SELECT * FROM Spaces ORDER BY space_id")
-    return jsonify([{**dict(r), "is_active": bool(r["is_active"])} for r in rows])
-
-
-@app.get("/computers")
-def list_computers():
-    rows = get_db().execute("SELECT * FROM Computers ORDER BY computer_id")
-    return jsonify([dict(r) for r in rows])
-
-
-@app.get("/equipment")
-def list_equipment():
-    rows = get_db().execute("SELECT * FROM Equipment ORDER BY equipment_id")
-    return jsonify([dict(r) for r in rows])
-
-
-@app.get("/time-blocks")
-def list_time_blocks():
-    day = parse_date(request.args.get("date"))
-    if day is None:
-        return error(400, "INVALID_DATE", "Choose a valid date.")
-    blocks = []
-    for hour in START_HOURS:
-        start, end = block_times(day, hour)
-        blocks.append(
-            {
-                "date": day.isoformat(),
-                "start_hour": hour,
-                "end_hour": hour + 2,
-                "start_time": start.isoformat(),
-                "end_time": end.isoformat(),
-            }
-        )
-    return jsonify(blocks)
-
-
-@app.get("/availability")
-def availability():
-    day = parse_date(request.args.get("date"))
-    if day is None:
-        return error(400, "INVALID_DATE", "Choose a valid date.")
-    hour = request.args.get("start_hour", type=int)
-    if hour not in START_HOURS:
-        return error(400, "INVALID_BLOCK", "Choose one of the available time blocks.")
-    start, _ = block_times(day, hour)
-    db = get_db()
-    space_ids = [
+def available_space_ids(db, start):
+    return [
         r["space_id"]
         for r in db.execute(
             """SELECT space_id FROM Spaces
@@ -134,7 +114,10 @@ def availability():
             (db_time(start),),
         )
     ]
-    equipment_ids = [
+
+
+def available_equipment_ids(db, start):
+    return [
         r["equipment_id"]
         for r in db.execute(
             """SELECT equipment_id FROM Equipment
@@ -146,7 +129,196 @@ def availability():
             (db_time(start),),
         )
     ]
-    return jsonify(space_ids=space_ids, equipment_ids=equipment_ids)
+
+
+def block_payload(db, day, hour, now):
+    start, end = block_times(day, hour)
+    return {
+        "date": day.isoformat(),
+        "start_hour": hour,
+        "end_hour": hour + 2,
+        "start_time": start.isoformat(),
+        "end_time": end.isoformat(),
+        "in_progress": start <= now < end,
+        "space_ids": available_space_ids(db, start),
+        "equipment_ids": available_equipment_ids(db, start),
+    }
+
+
+def current_or_next(now):
+    day = now.date()
+    for hour in START_HOURS:
+        _start, end = block_times(day, hour)
+        if now < end:
+            return day, hour
+    return day + timedelta(days=1), START_HOURS[0]
+
+
+def text_field(value, field):
+    if not isinstance(value, str) or not value.strip():
+        return None, error(400, "INVALID_FIELD", f"{field} must be text.", field=field)
+    return value.strip(), None
+
+
+def optional_text(value, field):
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, error(400, "INVALID_FIELD", f"{field} must be text.", field=field)
+    return (value.strip() or None), None
+
+
+def read_patch(allowed):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not body:
+        return None, error(400, "EMPTY_UPDATE", "Include at least one field to update.")
+    unknown = next((key for key in body if key not in allowed), None)
+    if unknown:
+        return None, error(400, "UNKNOWN_FIELD", f"Field cannot be updated: {unknown}.", field=unknown)
+    return body, None
+
+
+def apply_update(db, table, id_column, row_id, fields):
+    assignments = ", ".join(f"{name} = ?" for name in fields)
+    db.execute(
+        f"UPDATE {table} SET {assignments} WHERE {id_column} = ?",
+        (*fields.values(), row_id),
+    )
+
+
+@app.get("/")
+def index():
+    return redirect("/01-overview.html")
+
+
+@app.get("/inventory")
+def inventory():
+    db = get_db()
+    return jsonify(
+        spaces=[space_json(row) for row in db.execute("SELECT * FROM Spaces ORDER BY space_id")],
+        computers=[
+            computer_json(row) for row in db.execute("SELECT * FROM Computers ORDER BY computer_id")
+        ],
+        equipment=[
+            equipment_json(row) for row in db.execute("SELECT * FROM Equipment ORDER BY equipment_id")
+        ],
+    )
+
+
+@app.get("/spaces")
+def list_spaces():
+    rows = get_db().execute("SELECT * FROM Spaces ORDER BY space_id")
+    return jsonify([space_json(row) for row in rows])
+
+
+@app.patch("/spaces/<int:space_id>")
+def update_space(space_id):
+    body, failure = read_patch(("space_name", "description", "is_active"))
+    if failure:
+        return failure
+    fields = {}
+    if "space_name" in body:
+        value, failure = text_field(body["space_name"], "space_name")
+        if failure:
+            return failure
+        fields["space_name"] = value
+    if "description" in body:
+        value, failure = optional_text(body["description"], "description")
+        if failure:
+            return failure
+        fields["description"] = value
+    if "is_active" in body:
+        if not isinstance(body["is_active"], bool):
+            return error(400, "INVALID_FIELD", "is_active must be true or false.", field="is_active")
+        fields["is_active"] = body["is_active"]
+    db = get_db()
+    row = db.execute("SELECT * FROM Spaces WHERE space_id = ?", (space_id,)).fetchone()
+    if row is None:
+        return error(404, "SPACE_NOT_FOUND", f"Space {space_id} does not exist.", resource_ids=[space_id])
+    if fields:
+        apply_update(db, "Spaces", "space_id", space_id, fields)
+        row = db.execute("SELECT * FROM Spaces WHERE space_id = ?", (space_id,)).fetchone()
+    return jsonify(space_json(row))
+
+
+@app.get("/computers")
+def list_computers():
+    rows = get_db().execute("SELECT * FROM Computers ORDER BY computer_id")
+    return jsonify([computer_json(row) for row in rows])
+
+
+@app.patch("/computers/<int:computer_id>")
+def update_computer(computer_id):
+    body, failure = read_patch(("hostname", "specs", "status"))
+    if failure:
+        return failure
+    fields = {}
+    if "hostname" in body:
+        value, failure = text_field(body["hostname"], "hostname")
+        if failure:
+            return failure
+        fields["hostname"] = value
+    if "specs" in body:
+        value, failure = optional_text(body["specs"], "specs")
+        if failure:
+            return failure
+        fields["specs"] = value
+    if "status" in body:
+        if body["status"] not in COMPUTER_STATUSES:
+            return error(
+                400,
+                "INVALID_FIELD",
+                "status must be one of AVAILABLE, IN_USE, MAINTENANCE, OFFLINE.",
+                field="status",
+            )
+        fields["status"] = body["status"]
+    db = get_db()
+    row = db.execute("SELECT * FROM Computers WHERE computer_id = ?", (computer_id,)).fetchone()
+    if row is None:
+        return error(
+            404,
+            "COMPUTER_NOT_FOUND",
+            f"Computer {computer_id} does not exist.",
+            resource_ids=[computer_id],
+        )
+    if fields:
+        apply_update(db, "Computers", "computer_id", computer_id, fields)
+        row = db.execute("SELECT * FROM Computers WHERE computer_id = ?", (computer_id,)).fetchone()
+    return jsonify(computer_json(row))
+
+
+@app.get("/equipment")
+def list_equipment():
+    rows = get_db().execute("SELECT * FROM Equipment ORDER BY equipment_id")
+    return jsonify([equipment_json(row) for row in rows])
+
+
+@app.get("/availability")
+def availability():
+    unknown = next((key for key in request.args if key not in {"date", "start_hour"}), None)
+    if unknown:
+        return error(400, "UNKNOWN_PARAMETER", f"Unknown query parameter: {unknown}.", field=unknown)
+    raw_date = request.args.get("date")
+    raw_hour = request.args.get("start_hour")
+    if raw_hour is not None and raw_date is None:
+        return error(400, "MISSING_DATE", "Include date when filtering by start_hour.", field="date")
+    now = datetime.now()
+    db = get_db()
+    if raw_date is None:
+        day, hour = current_or_next(now)
+        return jsonify([block_payload(db, day, hour, now)])
+    day = parse_date(raw_date)
+    if day is None:
+        return error(400, "INVALID_DATE", "date must be a calendar date in YYYY-MM-DD format.", field="date")
+    if raw_hour is None:
+        return jsonify([block_payload(db, day, hour, now) for hour in START_HOURS])
+    try:
+        hour = int(raw_hour)
+    except ValueError:
+        hour = None
+    if hour not in START_HOURS:
+        return error(400, "INVALID_TIME_BLOCK", "Choose one of the available time blocks.", field="start_hour")
+    return jsonify([block_payload(db, day, hour, now)])
 
 
 @app.get("/reservations")
@@ -164,7 +336,7 @@ def list_reservations():
         params.append(space_id)
     sql += " ORDER BY created_at DESC"
     db = get_db()
-    return jsonify([reservation_json(db, r) for r in db.execute(sql, params).fetchall()])
+    return jsonify([reservation_json(db, row) for row in db.execute(sql, params).fetchall()])
 
 
 @app.post("/reservations")
@@ -176,10 +348,10 @@ def create_reservation():
     day = parse_date(body.get("date"))
     hour = body.get("start_hour")
 
-    if not isinstance(user_id, str) or not user_id or not isinstance(space_id, int) or day is None:
+    if not isinstance(user_id, str) or not user_id or not isinstance(space_id, int) or isinstance(space_id, bool) or day is None:
         return error(400, "INVALID_REQUEST", "Check the reservation details and try again.")
     if hour not in START_HOURS:
-        return error(400, "INVALID_BLOCK", "Choose one of the available time blocks.")
+        return error(400, "INVALID_TIME_BLOCK", "Choose one of the available time blocks.")
     if not isinstance(equipment_ids, list) or len(set(equipment_ids)) != len(equipment_ids):
         return error(400, "INVALID_REQUEST", "Check the reservation details and try again.")
 
@@ -198,7 +370,7 @@ def create_reservation():
             return error(404, "SPACE_NOT_FOUND", "That space could not be found.")
         if not space["is_active"]:
             db.execute("ROLLBACK")
-            return error(409, "SPACE_INACTIVE", "This space is not available for new bookings.")
+            return error(409, "SPACE_INACTIVE", "This space is not open for reservations. Choose another space.")
 
         for equipment_id in equipment_ids:
             if db.execute("SELECT 1 FROM Equipment WHERE equipment_id = ?", (equipment_id,)).fetchone() is None:
@@ -238,12 +410,12 @@ def create_reservation():
         reservation_id = cursor.lastrowid
         db.executemany(
             "INSERT INTO ReservationEquipment (reservation_id, equipment_id) VALUES (?, ?)",
-            [(reservation_id, e) for e in equipment_ids],
+            [(reservation_id, item_id) for item_id in equipment_ids],
         )
         db.execute("COMMIT")
     except sqlite3.Error:
         db.execute("ROLLBACK")
-        return error(500, "SAVE_FAILED", "We couldn't complete your reservation. Please try again.")
+        return error(500, "RESERVATION_FAILED", "We couldn't complete your reservation. Please try again.")
 
     row = db.execute("SELECT * FROM Reservations WHERE reservation_id = ?", (reservation_id,)).fetchone()
     return jsonify(reservation_json(db, row)), 201
