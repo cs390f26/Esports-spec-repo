@@ -59,7 +59,7 @@ Open the domain in a browser over HTTP:
 http://<your-subdomain>.moraviancs.click/
 ```
 
-The overview page should load. Use `http://`, not `https://`; the script does not set up a certificate.
+The overview page should load and list the stations from the database. Use `http://`, not `https://`; the script does not set up a certificate.
 
 ## 5. (Optional) Connect over SSH
 
@@ -74,8 +74,12 @@ Once connected, these commands confirm each part of the setup:
 # Output from the user data script
 sudo tail -n 50 /var/log/cloud-init-output.log
 
-# nginx is running
+# gunicorn is serving the app, and nginx is proxying port 80 to it
+systemctl status esports
 systemctl status nginx
+
+# The database answered an API request
+curl -sS http://127.0.0.1/inventory
 ```
 
 
@@ -88,6 +92,7 @@ systemctl status nginx
 | The browser times out                             | Port 80 is not open, or you used `https://`           | Add an HTTP rule for port 80 to the security group; open the `http://` address                          |
 | The domain does not load, but the Elastic IP does | The DNS record is new, or it points at a different IP | Wait a few minutes; check that [Moravian CS DNS](https://awsdns.moraviancs.click/) shows the Elastic IP |
 | The nginx welcome page appears                    | The script is still running or failed partway through | Wait a few minutes, then check `/var/log/cloud-init-output.log`                                         |
+| "The lounge database could not be reached."       | nginx is serving the HTML, but gunicorn or `esports.db` is not running | Check `systemctl status esports` and `/var/log/cloud-init-output.log`. Rerun the script below so it creates the database and proxies port 80 to gunicorn |
 | `git clone` fails in the log                      | The repository is private                             | Make the repository public                                                                              |
 | `pip install` fails in the log                    | `deploy/requirements.txt` was not pushed to GitHub    | Push it, then rerun the script as shown below                                                           |
 | SSH says permission denied                        | Wrong username, or the key file is too open           | Use `ubuntu` or `ec2-user`; run `chmod 400` on the key                                                  |
@@ -97,7 +102,7 @@ systemctl status nginx
 
 ## Updating the deployment
 
-User data does not run again on reboot. To pick up new commits, SSH in and rerun the script. It replaces the clone and the web folder each time, so it is safe to run again.
+User data does not run again on reboot. To pick up new commits, SSH in and rerun the script. It replaces the clone, rebuilds `esports.db` from the sample data, and restarts the app, so it is safe to run again. Bookings made on the instance are wiped when the script runs again.
 
 ```bash
 sudo bash /var/lib/cloud/instance/scripts/part-001
